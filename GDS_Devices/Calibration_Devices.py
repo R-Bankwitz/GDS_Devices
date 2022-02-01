@@ -8,7 +8,6 @@ from gdshelpers.parts.marker import SquareMarker
 from gdshelpers.parts.splitter import DirectionalCoupler
 from gdshelpers.parts.port import Port
 from gdshelpers.parts.spiral import Spiral
-from gdshelpers.parts.splitter import Splitter
 import numpy as np
 
 class ring_resonator:
