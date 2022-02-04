@@ -12,7 +12,7 @@ import numpy as np
 
 class ring_resonator:
 
-    def __init__(self, name, wg_width, pitch=250, bending_radius = 100, photonic_layer = 1, info_layer = 2, label_layer = 3, region_layer = 4):
+    def __init__(self, name, wg_width, pitch=127, bending_radius = 100, photonic_layer = 1, info_layer = 2, label_layer = 3, region_layer = 4):
         self.pitch = pitch
         self.name = name
         self.bendin_radius = bending_radius
@@ -51,12 +51,13 @@ class ring_resonator:
 
 class global_markers:
 
-    def __init__(self, marker_distance =200,  global_marker_layer = 5):
+    def __init__(self, name , marker_distance =200,  global_marker_layer = 5):
         self.marker_distance = marker_distance
         self.global_marker_layer = global_marker_layer
+        self.name = name
 
-    def create(self, dimension_x, dimension_y):
-        cell = Cell('global markers %sx%s' % (dimension_x, dimension_y))
+    def create(self, dimension_x, dimension_y, size = 20):
+        cell = Cell('global markers %s' % self.name)
         positions_LL = [(0, 0), (self.marker_distance, 0), (2*self.marker_distance, 0), (3*self.marker_distance, 0), (0, self.marker_distance), (0, 2*self.marker_distance), (0, 3*self.marker_distance)]
         positions_Ul = [(0, dimension_y), (self.marker_distance, dimension_y), (2*self.marker_distance, dimension_y), (3*self.marker_distance, dimension_y),
                         (0, dimension_y - self.marker_distance), (0, dimension_y - 2*self.marker_distance), (0, dimension_y - 3*self.marker_distance)]
@@ -66,10 +67,10 @@ class global_markers:
         positions_LR = [(dimension_x, 0), (dimension_x - self.marker_distance, 0), (dimension_x - 2*self.marker_distance, 0), (dimension_x - 3*self.marker_distance, 0),
                         (dimension_x, self.marker_distance), (dimension_x, 2*self.marker_distance), (dimension_x, 3*self.marker_distance)]
 
-        markers_LL = [SquareMarker.make_marker(position, 20) for position in positions_LL]
-        markers_UL = [SquareMarker.make_marker(position, 20) for position in positions_Ul]
-        markers_UR = [SquareMarker.make_marker(position, 20) for position in positions_UR]
-        markers_LR = [SquareMarker.make_marker(position, 20) for position in positions_LR]
+        markers_LL = [SquareMarker.make_marker(position, size) for position in positions_LL]
+        markers_UL = [SquareMarker.make_marker(position, size) for position in positions_Ul]
+        markers_UR = [SquareMarker.make_marker(position, size) for position in positions_UR]
+        markers_LR = [SquareMarker.make_marker(position, size) for position in positions_LR]
 
         cell.add_to_layer(self.global_marker_layer, geometric_union(markers_LL), )
         cell.add_to_layer(self.global_marker_layer, geometric_union(markers_UL), )
@@ -79,7 +80,7 @@ class global_markers:
 
 class conected_coupler:
 
-    def __init__(self, name, wg_width, pitch=250, bending_radius = 100, photonic_layer = 1, info_layer = 2, label_layer = 3,region_layer = 4):
+    def __init__(self, name, wg_width, pitch=127, bending_radius = 100, photonic_layer = 1, info_layer = 2, label_layer = 3,region_layer = 4):
         self.pitch = pitch
         self.name = name
         self.bendin_radius = bending_radius
@@ -89,7 +90,7 @@ class conected_coupler:
         self.label_layer = label_layer
         self.region_layer = region_layer
 
-    def create(self, x, y,coupler_params):
+    def create(self, x, y,coupler_params, marker = False):
 
         #sweep_coupler_params = {
         #    'width':self.wg_width,
@@ -105,26 +106,49 @@ class conected_coupler:
         outcoupler = GratingCoupler.make_traditional_coupler((x + self.pitch, y), **coupler_params)
 
         wg1 = Waveguide.make_at_port(incoupler.port)
-        wg1.add_straight_segment(20)
-        wg1.add_right_bend(125, np.pi)
-        wg1.add_straight_segment(20)
+        wg1.add_straight_segment(20, final_width=self.wg_width)
+        wg1.add_right_bend(125, np.pi/2)
+
+        wg2 = Waveguide.make_at_port(outcoupler.port)
+        wg2.add_straight_segment(20, final_width=self.wg_width)
+
+        wg1.add_route_single_circle_to_port(wg2.current_port)
 
         txt = ('n_grat: %s um\nangle: %s') \
              % (coupler_params['n_ap_gratings'], np.around(coupler_params['full_opening_angle'],2))  #
         device_info = Text(origin=(x + self.pitch / 2, y), height=20, text=txt, alignment='center-bottom')
         device_name = Text(origin=(x + self.pitch / 2, y + 30), height=20, text=self.name, alignment='center-bottom')
-        devices = geometric_union([incoupler, outcoupler, wg1])
+        devices = geometric_union([incoupler, outcoupler, wg1, wg2])
         cell = Cell("Coupler_%s" % (self.name))
+
         cell.add_to_layer(self.photonic_layer, devices)
         cell.add_to_layer(self.info_layer , device_info)
         cell.add_to_layer(self.label_layer, device_name)
         cell.add_region_layer(self.region_layer)
 
+        if marker:
+            if isinstance(marker, int):
+                for number in range(marker):
+                    coordinates = [(x+self.pitch/2, y-40), (x-25, y+130), (x+270, y+130)]
+                    markers = []
+                    for i in coordinates:
+                        m = SquareMarker(i, 20+10*number)
+                        markers.append(m)
+                    cell.add_to_layer(11+number, markers)
+            else:
+                coordinates =[(x+self.pitch/2, y-40), (x-25, y+130), (x+270, y+130)]
+                markers = []
+                for i in coordinates:
+                    m = SquareMarker(i, 20)
+                    markers.append(m)
+                cell.add_to_layer(11 , markers)
+
+
         return cell
 
 class directional_coupler:
 
-    def __init__(self, name, wg_width, pitch=250, photonic_layer=1, info_layer=2, label_layer=3,region_layer = 4):
+    def __init__(self, name, wg_width, pitch=127*2, photonic_layer=1, info_layer=2, label_layer=3,region_layer = 4):
         self.pitch = pitch
         self.name = name
         self.wg_width = wg_width
@@ -172,7 +196,7 @@ class directional_coupler:
         return cell
 
 class Spiral_with_coupler:
-    def __init__(self, name, wg_width, pitch=250, photonic_layer=1, info_layer=2, label_layer=3, region_layer = 4):
+    def __init__(self, name, wg_width, pitch=2*127, photonic_layer=1, info_layer=2, label_layer=3, region_layer = 4):
         self.pitch = pitch
         self.name = name
         self.wg_width = wg_width
@@ -180,8 +204,9 @@ class Spiral_with_coupler:
         self.info_layer = info_layer
         self.label_layer = label_layer
         self.region_layer = region_layer
+        self.pitch = pitch
 
-    def create(self, x, y, coupler_params, number_of_roundtrips, bending = 80):
+    def create(self, x, y, coupler_params, number_of_roundtrips=2, bending = 100, marker = False):
         inner_gap = bending
         gap = 3 *  self.wg_width
         incoupler = GratingCoupler.make_traditional_coupler((x, y), **coupler_params)
@@ -199,11 +224,127 @@ class Spiral_with_coupler:
         device_info = Text(origin=(x + self.pitch / 2, y), height=20, text=txt, alignment='center-bottom')
         device_name = Text(origin=(x + self.pitch / 2, y + 30), height=20, text=self.name, alignment='center-bottom')
         devices = geometric_union([incoupler, outcoupler, wg1, wg2, spiral_2])
+
         cell = Cell("Spiral_%s" % (self.name))
         cell.add_to_layer(self.photonic_layer, devices)
         cell.add_to_layer(self.info_layer, device_info)
         cell.add_to_layer(self.label_layer, device_name)
         cell.add_region_layer(self.region_layer)
+
+        if marker:
+            if isinstance(marker, int):
+                for number in range(marker):
+                    coordinates = [(x+self.pitch/2, y-40), (x-30, y+337), (x+280, y+337)]
+                    markers = []
+                    for i in coordinates:
+                        m = SquareMarker(i, 20+10*number)
+                        markers.append(m)
+                    cell.add_to_layer(11+number, markers)
+            else:
+                coordinates = [(x+self.pitch/2, y-40), (x-30, y+337), (x+280, y+337)]
+                markers = []
+                for i in coordinates:
+                    m = SquareMarker(i, 20)
+                    markers.append(m)
+                cell.add_to_layer(11 , markers)
+
+
+        return cell
+
+class rotated_directional_coupler:
+    def __init__(self, name, wg_width, pitch=127, photonic_layer=1, info_layer=2, label_layer=3, region_layer = 4):
+        self.pitch = pitch
+        self.name = name
+        self.wg_width = wg_width
+        self.photonic_layer = photonic_layer
+        self.info_layer = info_layer
+        self.label_layer = label_layer
+        self.region_layer = region_layer
+        self.pitch = pitch
+
+    def create(self, x, y, coupler_params, coupler_sep, coupler_length, marker = False):
+        x_DC_length = 80
+        y_DC_length = 100 / 2.0 - coupler_sep / 2.0 - self.wg_width / 2.0
+        center_x = x + self.pitch*3
+        center_y = y+170
+
+        lower_DC_WG = Waveguide.make_at_port(Port((center_x - coupler_length/2- x_DC_length, center_y - 50),0, self.wg_width))
+        upper_DC_WG = Waveguide.make_at_port(Port((center_x -  coupler_length/2 - x_DC_length, center_y + 50),0, self.wg_width))
+
+        coupler1 = GratingCoupler.make_traditional_coupler((x, y), **coupler_params)
+        wg1 = Waveguide.make_at_port(coupler1.port)
+        wg1.add_straight_segment(20, final_width=self.wg_width)
+
+        coupler2 = GratingCoupler.make_traditional_coupler((x+self.pitch, y), **coupler_params)
+        wg2 = Waveguide.make_at_port(coupler2.port)
+        wg2.add_straight_segment(20, final_width=self.wg_width)
+
+        coupler3 = GratingCoupler.make_traditional_coupler((x+5*self.pitch, y), **coupler_params)
+        wg3 = Waveguide.make_at_port(coupler3.port)
+        wg3.add_straight_segment(20, final_width=self.wg_width)
+
+        coupler4 = GratingCoupler.make_traditional_coupler((x+6*self.pitch, y), **coupler_params)
+        wg4 = Waveguide.make_at_port(coupler4.port)
+        wg4.add_straight_segment(20, final_width=self.wg_width)
+
+        upper_DC_WG.add_parameterized_path(
+            path=lambda t: (t * x_DC_length, .5 * (np.cos(np.pi * t) - 1) * +y_DC_length),
+            path_derivative=lambda t: (
+                x_DC_length, -np.pi * .5 * np.sin(np.pi * t) * +y_DC_length))
+        upper_DC_WG.add_straight_segment(coupler_length)
+        upper_DC_WG.add_parameterized_path(
+            path=lambda t: (t * x_DC_length, .5 * (np.cos(np.pi * t) - 1) * -y_DC_length),
+            path_derivative=lambda t: (
+                x_DC_length, -np.pi * .5 * np.sin(np.pi * t) * -y_DC_length))
+
+        lower_DC_WG.add_parameterized_path(
+            path=lambda t: (t * x_DC_length, .5 * (np.cos(np.pi * t) - 1) * -y_DC_length),
+            path_derivative=lambda t: (
+                x_DC_length, -np.pi * .5 * np.sin(np.pi * t) * -y_DC_length))
+        lower_DC_WG.add_straight_segment(coupler_length)
+        lower_DC_WG.add_parameterized_path(
+            path=lambda t: (t * x_DC_length, .5 * (np.cos(np.pi * t) - 1) * +y_DC_length),
+            path_derivative=lambda t: (
+                x_DC_length, -np.pi * .5 * np.sin(np.pi * t) * +y_DC_length))
+
+        wg1.add_route_single_circle_to_port(Port((center_x - coupler_length/2- x_DC_length, center_y + 50),0, self.wg_width).inverted_direction,100)
+        wg2.add_route_single_circle_to_port(
+            Port((center_x - coupler_length / 2 - x_DC_length, center_y - 50), 0, self.wg_width).inverted_direction,100)
+        wg3.add_route_single_circle_to_port(lower_DC_WG.current_port,100)
+        wg4.add_route_single_circle_to_port(upper_DC_WG.current_port,100)
+
+        cell = Cell(self.name)
+
+        txt = ('gap: %s um\nlength: %s um') \
+              % (np.around(coupler_sep, 2), np.around(coupler_length, 2),)
+
+        devices = geometric_union([coupler1, coupler2, coupler3, coupler4, lower_DC_WG, upper_DC_WG, wg1, wg2, wg3, wg4])
+        device_info = Text(origin=(x + 3*self.pitch , y-30), height=20, text=txt, alignment='center-bottom')
+        device_name = Text(origin=(x + 3*self.pitch , y + 30), height=20, text="rotated DC %s" %self.name, alignment='center-bottom')
+
+        cell.add_to_layer(self.photonic_layer, devices)
+        cell.add_to_layer(self.info_layer, device_info)
+        cell.add_to_layer(self.label_layer, device_name)
+        cell.add_region_layer(self.region_layer)
+
+        if marker:
+            if isinstance(marker, int):
+                for number in range(marker):
+                    coordinates = [(x + self.pitch / 2+30, y +150), (x +230, y + 40), (x + 670, y + 150)]
+                    markers = []
+                    for i in coordinates:
+                        m = SquareMarker(i, 20+10*number)
+                        markers.append(m)
+                    cell.add_to_layer(11+number, markers)
+            else:
+                coordinates = [(x + self.pitch / 2, y +100), (x +230, y + 40), (x + 580, y + 100)]
+                markers = []
+                for i in coordinates:
+                    m = SquareMarker(i, 20)
+                    markers.append(m)
+                cell.add_to_layer(11 , markers)
+
+
         return cell
 
 
